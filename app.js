@@ -91,6 +91,7 @@ function initializeGame(roomId) {
   room.status = 'IN_PROGRESS';
   room.turnIndex = 0;
   room.turnOrder = players.map(p => p.id);
+  room.currentRoll = null;
 }
 
 // Serve single-page web client
@@ -161,6 +162,17 @@ app.get('/', (req, res) => {
       </div>
 
       <div class="controls-container">
+        <div class="card">
+          <h3>Movement Control</h3>
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+            <button id="roll-btn" onclick="rollDice()">🎲 Roll Dice</button>
+            <div id="dice-result" style="font-size: 1.2rem; font-weight: bold;">Roll: --</div>
+          </div>
+          <p style="font-size: 0.85rem; color: #aaa; margin: 0;">
+            Roll the dice, then click on the board to position your token.
+          </p>
+        </div>
+
         <div class="card">
           <h3>Your Active Token</h3>
           <select id="my-suspect">
@@ -233,12 +245,12 @@ app.get('/', (req, res) => {
     };
 
     const WEAPON_IMAGES = {
-      'Turtle':       'Remove background project - July 31, 2026 at 02.01.08 (1).jpg',
-      'Fist':         'Remove background project - July 31, 2026 at 02.01.08.jpg',
-      'Leaf Blower':  'Remove background project - July 31, 2026 at 02.01.08 (5).jpg',
-      'Red Solo Cup': 'Remove background project - July 31, 2026 at 02.01.08 (3).png',
-      'Rubber Duck':  'Remove background project - July 31, 2026 at 02.01.08 (2).jpg',
-      'SUV':          'Remove background project - July 31, 2026 at 02.01.08 (6).jpg'
+      'Turtle':       'turtle.jpg',
+      'Fist':         'fist.jpg',
+      'Leaf Blower':  'leafblower.jpg',
+      'Red Solo Cup': 'redsolocup.png',
+      'Rubber Duck':  'rubberduck.jpg',
+      'SUV':          'suv.jpg'
     };
 
     function log(msg) {
@@ -262,6 +274,10 @@ app.get('/', (req, res) => {
       socket.emit('startGame', currentRoom);
     }
 
+    function rollDice() {
+      socket.emit('rollDice', currentRoom);
+    }
+
     function handleBoardClick(event) {
       const img = document.getElementById('board-img');
       const rect = img.getBoundingClientRect();
@@ -274,6 +290,210 @@ app.get('/', (req, res) => {
         suspect: selectedSuspect,
         x: xPercent.toFixed(2),
         y: yPercent.toFixed(2)
+      });
+    }
+
+    function makeSuggestion() {
+      socket.emit('makeSuggestion', {
+        roomId: currentRoom,
+        suspect: document.getElementById('suspect-select').value,
+        weapon: document.getElementById('weapon-select').value,
+        room: document.getElementById('room-select').value
+      });
+    }
+
+    function makeAccusation() {
+      if (confirm("Are you sure? An incorrect accusation eliminates you from winning!")) {
+        socket.emit('makeAccusation', {
+          roomId: currentRoom,
+          suspect: document.getElementById('suspect-select').value,
+          weapon: document.getElementById('weapon-select').value,
+          room: document.getElementById('room-select').value
+        });
+      }
+    }
+
+    // Socket Events
+    socket.on('roomState', (state) => {
+      log('Players in room: ' + Object.keys(state.players).length);
+    });
+
+    socket.on('gameStarted', () => {
+      log('Game started!');
+      document.getElementById('start-btn').style.display = 'none';
+    });
+
+    socket.on('privateHand', (hand) => {
+      document.getElementById('hand-container').innerHTML = hand.map(c => '<span class="hand-card">' + c + '</span>').join('');
+    });
+
+    socket.on('diceRolled', ({ player, die1, die2, total }) => {
+      document.getElementById('dice-result').innerHTML = '🎲 ' + die1 + ' + ' + die2 + ' = <strong>' + total + '</strong>';
+      log(player + ' rolled a ' + total + ' (' + die1 + ' + ' + die2 + ')');
+    });
+
+    socket.on('updatePositions', (positions) => {
+      const layer = document.getElementById('tokens-layer');
+      layer.innerHTML = '';
+      for (const [suspect, pos] of Object.entries(positions)) {
+        if (SUSPECT_IMAGES[suspect]) {
+          const img = document.createElement('img');
+          img.className = 'token';
+          img.src = SUSPECT_IMAGES[suspect];
+          img.title = suspect;
+          img.style.left = pos.x + '%';
+          img.style.top = pos.y + '%';
+          layer.appendChild(img);
+        }
+      }
+    });
+
+    socket.on('updateWeaponPositions', (weaponPositions) => {
+      const layer = document.getElementById('weapons-layer');
+      layer.innerHTML = '';
+      for (const [weapon, pos] of Object.entries(weaponPositions)) {
+        if (WEAPON_IMAGES[weapon]) {
+          const img = document.createElement('img');
+          img.className = 'weapon-token';
+          img.src = WEAPON_IMAGES[weapon];
+          img.title = weapon;
+          img.style.left = pos.x + '%';
+          img.style.top = pos.y + '%';
+          layer.appendChild(img);
+        }
+      }
+    });
+
+    socket.on('suggestionMade', ({ by, suggestion }) => {
+      log(by + ' suggested: ' + suggestion.suspect + ' in ' + suggestion.room + ' with the ' + suggestion.weapon);
+    });
+
+    socket.on('gameOver', ({ winner, solution }) => {
+      alert('GAME OVER! Winner: ' + winner + '\\nSolution: ' + solution.suspect + ', ' + solution.weapon + ', ' + solution.room);
+    });
+
+    socket.on('playerEliminated', ({ playerName, message }) => {
+      log(playerName + ' eliminated! ' + message);
+    });
+  </script>
+</body>
+</html>
+  `);
+});
+
+// Static assets (Place image files in the same directory as app.js)
+app.use(express.static(__dirname));
+
+// Socket.io Game Server Logic
+io.on('connection', (socket) => {
+  socket.on('joinRoom', ({ roomId, playerName }) => {
+    socket.join(roomId);
+
+    if (!games[roomId]) {
+      games[roomId] = {
+        id: roomId,
+        players: {},
+        status: 'LOBBY',
+        envelope: null,
+        turnIndex: 0,
+        turnOrder: [],
+        currentRoll: null,
+        positions: { ...INITIAL_POSITIONS },
+        weaponPositions: { ...INITIAL_WEAPON_POSITIONS }
+      };
+    }
+
+    games[roomId].players[socket.id] = {
+      id: socket.id,
+      name: playerName || `Player ${Object.keys(games[roomId].players).length + 1}`,
+      hand: [],
+      eliminated: false
+    };
+
+    io.to(roomId).emit('roomState', games[roomId]);
+    io.to(roomId).emit('updatePositions', games[roomId].positions);
+    io.to(roomId).emit('updateWeaponPositions', games[roomId].weaponPositions);
+  });
+
+  socket.on('startGame', (roomId) => {
+    const game = games[roomId];
+    if (game && Object.keys(game.players).length >= 2) {
+      initializeGame(roomId);
+      io.to(roomId).emit('gameStarted', game);
+      Object.values(game.players).forEach(p => {
+        io.to(p.id).emit('privateHand', p.hand);
+      });
+    }
+  });
+
+  socket.on('rollDice', (roomId) => {
+    const game = games[roomId];
+    if (!game || game.status !== 'IN_PROGRESS') return;
+
+    const die1 = Math.floor(Math.random() * 6) + 1;
+    const die2 = Math.floor(Math.random() * 6) + 1;
+    const totalRoll = die1 + die2;
+
+    game.currentRoll = totalRoll;
+
+    io.to(roomId).emit('diceRolled', {
+      player: game.players[socket.id] ? game.players[socket.id].name : 'Player',
+      die1,
+      die2,
+      total: totalRoll
+    });
+  });
+
+  socket.on('moveToken', ({ roomId, suspect, x, y }) => {
+    const game = games[roomId];
+    if (game && game.positions[suspect]) {
+      game.positions[suspect] = { x, y };
+      io.to(roomId).emit('updatePositions', game.positions);
+    }
+  });
+
+  socket.on('makeSuggestion', ({ roomId, suspect, weapon, room }) => {
+    const game = games[roomId];
+    if (!game || game.status !== 'IN_PROGRESS') return;
+
+    const targetCoords = ROOM_COORDINATES[room];
+    if (targetCoords) {
+      game.positions[suspect] = { x: targetCoords.x - 3, y: targetCoords.y };
+      game.weaponPositions[weapon] = { x: targetCoords.x + 3, y: targetCoords.y };
+
+      io.to(roomId).emit('updatePositions', game.positions);
+      io.to(roomId).emit('updateWeaponPositions', game.weaponPositions);
+    }
+
+    io.to(roomId).emit('suggestionMade', {
+      by: game.players[socket.id].name,
+      suggestion: { suspect, weapon, room }
+    });
+  });
+
+  socket.on('makeAccusation', ({ roomId, suspect, weapon, room }) => {
+    const game = games[roomId];
+    if (!game || game.status !== 'IN_PROGRESS') return;
+
+    const env = game.envelope;
+    const isCorrect = env.suspect === suspect && env.weapon === weapon && env.room === room;
+
+    if (isCorrect) {
+      game.status = 'ENDED';
+      io.to(roomId).emit('gameOver', { winner: game.players[socket.id].name, solution: env });
+    } else {
+      game.players[socket.id].eliminated = true;
+      io.to(roomId).emit('playerEliminated', {
+        playerName: game.players[socket.id].name,
+        message: 'Incorrect accusation!'
+      });
+    }
+  });
+});
+
+server.listen(PORT, () => {
+  console.log(`Clue App running on http://localhost:${PORT}`);
+});        y: yPercent.toFixed(2)
       });
     }
 
