@@ -154,7 +154,7 @@ app.get('/', (req, res) => {
       <div class="card">
         <h3>Game Board (Click tile to move selected suspect)</h3>
         <div class="board-wrapper" id="board-container" onclick="handleBoardClick(event)">
-          <img src="GameBoard (1).jpg" id="board-img" class="board-img" alt="Game Board" />
+          <img src="GameBoard (1).png" id="board-img" class="board-img" alt="Game Board" />
           <div id="tokens-layer"></div>
           <div id="weapons-layer"></div>
         </div>
