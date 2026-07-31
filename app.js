@@ -22,7 +22,7 @@ const WEAPONS = [
 const ROOMS = [
   '34 Fairview', 'Canton Library', 'Canton High School',
   'Sallyport', '1 Meadows', 'Canton Police Dept.',
-  'D & E Pizza', 'CF McCarthy\'s Bar', 'The Waterfall Bar & Grill'
+  'D & E Pizza', 'CF McCarthy's Bar', 'The Waterfall Bar & Grill'
 ];
 
 const INITIAL_POSITIONS = {
@@ -51,7 +51,7 @@ const ROOM_COORDINATES = {
   '1 Meadows':                 { x: 80, y: 48 },
   'Canton Police Dept.':       { x: 20, y: 72 },
   'D & E Pizza':               { x: 20, y: 90 },
-  'CF McCarthy\'s Bar':        { x: 50, y: 78 },
+  'CF McCarthy's Bar':        { x: 50, y: 78 },
   'The Waterfall Bar & Grill': { x: 80, y: 90 }
 };
 
@@ -236,12 +236,12 @@ app.get('/', (req, res) => {
     let currentRoom = '';
 
     const SUSPECT_IMAGES = {
-      'Brian Albert':  'unnamed (3).webp',
-      'Jen McCabe':    'unnamed (2).webp',
-      'Matt McCabe':   'unnamed (1).webp',
-      'Coco Albert':   'Gemini_Generated_Image_lsky30lsky30lsky.png',
-      'Brian Higgins': 'Gemini_Generated_Image_84kpll84kpll84kp (1).png',
-      'Colin Albert':  'Gemini_Generated_Image_sh2vjnsh2vjnsh2v (1).png'
+      'Brian Albert':  'brianalbert.webp',
+      'Jen McCabe':    'jen.webp',
+      'Matt McCabe':   'matt.webp',
+      'Coco Albert':   'coco.png',
+      'Brian Higgins': 'higgins.png',
+      'Colin Albert':  'colin.png'
     };
 
     const WEAPON_IMAGES = {
